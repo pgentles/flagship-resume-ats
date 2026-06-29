@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json({ limit: '512kb' }));
 
 // ─── X402 Middleware (x402 v2 spec compliant) ──────────────────────
-const FREE_PATHS = ['/', '/health', '/openapi.json', '/favicon.ico', '/api/formats', '/api/keywords'];
+const FREE_PATHS = ['/', '/health', '/openapi.json', '/favicon.ico', '/api/formats', '/api/keywords', '/api/sales'];
 
 app.use((req: Request, res: Response, next: any) => {
   if (FREE_PATHS.includes(req.path)) return next();
@@ -45,6 +45,16 @@ app.use((req: Request, res: Response, next: any) => {
   }
 
   next();
+
+  // Payment received → record sale
+  if (payment && req.path.startsWith('/api/') && !FREE_PATHS.includes(req.path)) {
+    const type = (req.path.match(/\/api\/(\w+)/)?.[1] || 'unknown') as string;
+    queryLog.push({
+      type,
+      timestamp: new Date().toISOString(),
+      path: req.path,
+    });
+  }
 });
 
 // ─── ATS Keyword Database ───────────────────────────────────────────
@@ -376,6 +386,24 @@ app.get('/health', (_req: Request, res: Response) => {
     version: VERSION,
     endpoints: ['/api/analyze', '/api/tailor', '/api/score', '/api/formats', '/api/keywords'],
     uptime: process.uptime()
+  });
+});
+
+// ─── Sales Endpoint ─────────────────────────────────────────────────
+app.get('/api/sales', (_req: Request, res: Response) => {
+  const transactions = queryLog
+    .filter(q => q.type !== 'sales')
+    .map(q => ({
+      type: q.type,
+      timestamp: q.timestamp,
+      path: q.path,
+      amountUsdc: q.type === 'analyze' ? '0.05' : q.type === 'tailor' ? '0.10' : q.type === 'score' ? '0.03' : '0.05',
+    }));
+  const totalRevenue = transactions.reduce((sum, t) => sum + parseFloat(t.amountUsdc), 0);
+  res.json({
+    total: transactions.length,
+    revenue_usdc: totalRevenue.toFixed(2),
+    recent: transactions.slice(-20),
   });
 });
 
