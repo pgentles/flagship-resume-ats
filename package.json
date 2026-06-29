@@ -1,0 +1,21 @@
+{
+  "name": "flagship-resume-ats",
+  "version": "1.0.0",
+  "description": "AI-powered ATS resume optimization — analyze, score, and tailor resumes for applicant tracking systems (X402)",
+  "main": "dist/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc && node dist/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "typescript": "^5.9.3"
+  }
+}
