@@ -13,6 +13,13 @@ app.use(express.json({ limit: '512kb' }));
 // ─── X402 Middleware (x402 v2 spec compliant) ──────────────────────
 const FREE_PATHS = ['/', '/health', '/openapi.json', '/favicon.ico', '/api/formats', '/api/keywords', '/api/sales'];
 
+// Price map per endpoint (atomic units)
+const priceMap: Record<string, string> = {
+  'api/analyze': '50000',  // 0.05 USDC
+  'api/tailor': '100000',  // 0.10 USDC
+  'api/score': '30000',    // 0.03 USDC
+};
+
 app.use((req: Request, res: Response, next: any) => {
   if (FREE_PATHS.includes(req.path)) return next();
 
@@ -20,22 +27,45 @@ app.use((req: Request, res: Response, next: any) => {
   if (!payment) {
     const wallet = process.env.WALLET_ADDRESS || '0x421C25445d6CF7B292933D743E698ed24dE36270';
     const resourceUrl = `https://${req.headers.host}${req.path}`;
-    const accepts = [{
-      scheme: 'exact',
-      network: BASE_NETWORK_CAIP2,
-      amount: '50000',
-      asset: USDC_BASE_MAINNET,
-      payTo: wallet,
-      maxTimeoutSeconds: 60,
-      resource: {
-        url: resourceUrl,
-        description: 'ATS resume analysis, scoring, tailoring, and job matching',
-        mimeType: 'application/json',
-        serviceName: 'Flagship Resume ATS',
-        tags: ['resume', 'ats', 'job-search', 'career', 'optimization'],
+    const endpointName = req.path.replace('/api/', '');
+    const amount = priceMap[endpointName] || '50000';
+
+    // Per x402 spec: provide TWO network requirements — "base" first, then "eip155:8453"
+    // Both with same asset, payTo, amount, resource, scheme: "exact"
+    const accepts = [
+      {
+        scheme: 'exact',
+        network: 'base',
+        amount,
+        asset: USDC_BASE_MAINNET,
+        payTo: wallet,
+        maxTimeoutSeconds: 60,
+        resource: {
+          url: resourceUrl,
+          description: 'ATS resume analysis, scoring, tailoring, and job matching',
+          mimeType: 'application/json',
+          serviceName: 'Flagship Resume ATS',
+          tags: ['resume', 'ats', 'job-search', 'career', 'optimization'],
+        },
+        extra: { name: 'USDC', version: '2' },
       },
-      extra: { name: 'USDC', version: '2' },
-    }];
+      {
+        scheme: 'exact',
+        network: BASE_NETWORK_CAIP2,
+        amount,
+        asset: USDC_BASE_MAINNET,
+        payTo: wallet,
+        maxTimeoutSeconds: 60,
+        resource: {
+          url: resourceUrl,
+          description: 'ATS resume analysis, scoring, tailoring, and job matching',
+          mimeType: 'application/json',
+          serviceName: 'Flagship Resume ATS',
+          tags: ['resume', 'ats', 'job-search', 'career', 'optimization'],
+        },
+        extra: { name: 'USDC', version: '2' },
+      }
+    ];
     const body = { x402Version: 2, accepts, wallet };
     const b64 = Buffer.from(JSON.stringify(body)).toString('base64');
     res.set('X-Payment-Protocol', 'x402');
